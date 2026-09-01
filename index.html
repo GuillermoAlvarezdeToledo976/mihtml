@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>HH — Fijación de Voltaje</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── RESET & BASE ─────────────────────────────── */
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family: Georgia,'Times New Roman',serif;
+  background: #f4f1eb;
+  color: #2c2c2c;
+  min-height: 100vh;
+  padding-bottom: 80px;
+}
+
+/* ── HEADER ──────────────────────────────────── */
+.top-bar {
+  background: #065f46;
+  color: white;
+  padding: 12px 14px 10px;
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.top-bar h1 { font-size: .95em; font-weight: 700; letter-spacing: .02em; }
+.top-bar .sub { font-size: .7em; opacity: .75; font-style: italic; margin-top:1px; }
+
+/* ── BARRA INFERIOR FIJA ─────────────────────── */
+.bottom-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 300;
+  background: white;
+  border-top: 2px solid #6ee7b7;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 -2px 10px rgba(0,0,0,.12);
+}
+.btn-run-big {
+  flex: 1; background: #065f46; color: white;
+  border: none; border-radius: 8px;
+  padding: 12px 0; font-family: Georgia,serif;
+  font-size: 1em; font-weight: 700; cursor: pointer;
+  transition: background .2s;
+}
+.btn-run-big:disabled { background: #9ca3af; }
+.btn-run-big:active { background: #047857; }
+.btn-reset-sm {
+  background: #6b7280; color: white; border: none; border-radius: 8px;
+  padding: 12px 14px; font-size: .9em; font-family: Georgia,serif; cursor: pointer;
+}
+.btn-reset-sm:active { background: #4b5563; }
+
+/* ── TABS ────────────────────────────────────── */
+.tab-nav {
+  display: flex; background: white;
+  border-bottom: 2px solid #d1fae5;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tab-nav::-webkit-scrollbar { display: none; }
+.tab-btn {
+  flex: 0 0 auto; padding: 11px 18px;
+  border: none; background: transparent;
+  font-family: Georgia,serif; font-size: .82em; font-weight: 600;
+  color: #6b7280; cursor: pointer; white-space: nowrap;
+  border-bottom: 3px solid transparent; transition: all .15s;
+}
+.tab-btn.active { color: #065f46; border-bottom-color: #065f46; background: #ecfdf5; }
+
+/* ── PANELES ─────────────────────────────────── */
+.tab-content { display: none; padding: 12px; }
+.tab-content.active { display: block; }
+
+/* ── TARJETA ─────────────────────────────────── */
+.card {
+  background: white; border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.08);
+  padding: 14px; margin-bottom: 12px;
+}
+.card h2 {
+  color: #065f46; font-size: .9em; font-weight: 700;
+  margin-bottom: 12px; padding-bottom: 6px;
+  border-bottom: 1.5px solid #d1fae5;
+}
+.form-group { margin-bottom: 10px; }
+.form-group label {
+  display: block; font-size: .8em; font-weight: 600;
+  color: #374151; margin-bottom: 3px;
+}
+.form-group input {
+  width: 100%; padding: 9px 10px;
+  border: 1.5px solid #d1d5db; border-radius: 7px;
+  font-family: Georgia,serif; font-size: .95em;
+  background: #fafafa; -webkit-appearance: none;
+}
+.form-group input:focus {
+  outline: none; border-color: #059669;
+  box-shadow: 0 0 0 2px rgba(5,150,105,.12);
+}
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ── NERNST ──────────────────────────────────── */
+.nernst-box {
+  margin-top: 12px; padding: 12px; border-radius: 8px;
+  background: #ecfdf5;
+}
+.nernst-box h3 { font-size: .8em; color: #065f46; margin-bottom: 8px; }
+.nernst-vals { display: flex; justify-content: space-around; }
+.nernst-item { text-align: center; }
+.nernst-item .nl { font-size: .72em; font-weight: 700; color: #065f46; }
+.nernst-item .nv { font-size: 1.1em; font-weight: 700; color: #059669; }
+
+/* ── BLOQUEADORES ────────────────────────────── */
+.blocker-info { font-size: .72em; color: #6b7280; margin-top: 2px; }
+
+/* ── VOLTAGE PREVIEW ─────────────────────────── */
+.vc-preview {
+  background: #f0fdf4; border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 10px;
+  border: 1px solid #bbf7d0;
+}
+.vc-preview canvas { width: 100%; display: block; }
+.vc-labels {
+  display: flex; justify-content: space-between;
+  font-size: .72em; color: #6b7280; margin-top: 4px;
+  font-family: 'Courier New', monospace;
+}
+.vc-labels span { color: #065f46; font-weight: 700; }
+
+/* ── SUB-TABS ────────────────────────────────── */
+.sub-tab-nav {
+  display: flex; background: #f4f1eb;
+  border-bottom: 2px solid #d1fae5;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; margin-bottom: 12px;
+  border-radius: 8px 8px 0 0;
+}
+.sub-tab-nav::-webkit-scrollbar { display: none; }
+.sub-tab-btn {
+  flex: 1; padding: 10px 4px;
+  border: none; background: transparent;
+  font-family: Georgia,serif; font-size: .76em; font-weight: 600;
+  color: #6b7280; cursor: pointer; white-space: nowrap;
+  border-bottom: 3px solid transparent; transition: all .15s;
+  text-align: center;
+}
+.sub-tab-btn.active { color: #065f46; border-bottom-color: #065f46; background: #ecfdf5; }
+.sub-panel { display: none; }
+.sub-panel.active { display: block; }
+
+/* ── GRÁFICAS ────────────────────────────────── */
+.graph-card {
+  background: white; border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.08);
+  padding: 12px 6px 8px; margin-bottom: 14px;
+}
+.canvas-wrap {
+  position: relative; width: 100%; height: 250px;
+}
+.graph-card canvas {
+  position: absolute; top: 0; left: 0;
+  width: 100% !important; height: 100% !important;
+  touch-action: none;
+}
+.graph-card .gt {
+  font-size: .82em; font-weight: 700; color: #065f46;
+  margin-bottom: 8px; display: flex; align-items: center;
+  justify-content: space-between; padding: 0 4px;
+}
+.hidden { display: none !important; }
+
+/* ── TIMEBASE ────────────────────────────────── */
+.tb-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tb-btn {
+  padding: 6px 11px; border: 1.5px solid #6ee7b7;
+  border-radius: 5px; background: #ecfdf5;
+  color: #065f46; font-family: Georgia,serif;
+  font-size: .78em; font-weight: 600; cursor: pointer;
+}
+.tb-btn.active { background: #065f46; color: white; border-color: #065f46; }
+
+/* ── TOGGLE GRÁFICAS ─────────────────────────── */
+.tog-row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.tog-btn {
+  padding: 5px 10px; border: 1.5px solid #6ee7b7;
+  border-radius: 5px; background: #ecfdf5;
+  color: #065f46; font-family: Georgia,serif;
+  font-size: .76em; font-weight: 700; cursor: pointer;
+}
+.tog-btn.active { background: #065f46; color: white; border-color: #065f46; }
+
+/* ── GUARDAR TRAZO ───────────────────────────── */
+.save-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.btn-save {
+  background: #1d4ed8; color: white; border: none;
+  border-radius: 7px; padding: 8px 14px;
+  font-family: Georgia,serif; font-size: .82em; font-weight: 700; cursor: pointer;
+}
+.btn-save:disabled { background: #9ca3af; cursor: not-allowed; }
+.btn-clear-bank {
+  background: #7f1d1d; color: white; border: none;
+  border-radius: 7px; padding: 8px 12px;
+  font-family: Georgia,serif; font-size: .78em; cursor: pointer;
+}
+.trace-count { font-size: .78em; color: #1d4ed8; font-weight: 700; }
+
+/* ── BANCO DE TRAZOS ─────────────────────────── */
+.bank-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.bank-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 8px;
+  border: 2px solid; background: #fafafa;
+}
+.bank-swatch { width: 28px; height: 5px; border-radius: 3px; flex-shrink: 0; }
+.bank-info { flex: 1; min-width: 0; }
+.bank-label { font-size: .8em; font-weight: 700; }
+.bank-params { font-size: .7em; color: #6b7280; margin-top: 1px; }
+.bank-del {
+  background: none; border: none; color: #ef4444;
+  font-size: 1.1em; font-weight: 700; cursor: pointer; padding: 2px 6px;
+}
+
+/* ── CURSOR INFO ─────────────────────────────── */
+.cursor-info {
+  font-size: .75em; color: #065f46;
+  background: #ecfdf5; border-radius: 6px;
+  padding: 5px 8px; margin-top: 6px;
+  min-height: 22px; font-family: 'Courier New', monospace;
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.cursor-info span { font-weight: 700; color: #059669; }
+
+/* ── CONTROLES RÁPIDOS ───────────────────────── */
+.controls-bar {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; margin-bottom: 10px;
+  background: white; border-radius: 8px;
+  padding: 8px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.controls-bar label { font-size: .78em; font-weight: 700; color: #065f46; }
+.controls-bar input {
+  width: 65px; padding: 6px 8px;
+  border: 1.5px solid #d1d5db; border-radius: 6px;
+  font-family: Georgia,serif; font-size: .88em; text-align: right;
+}
+.controls-bar .unit { font-size: .75em; color: #6b7280; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="top-bar">
+  <h1>🔬 Hodgkin-Huxley — Fijación de Voltaje</h1>
+  <div class="sub">Modelo clásico · Banco de trazos · Disección de corrientes</div>
+</div>
+
+<!-- TABS -->
+<div class="tab-nav">
+  <button class="tab-btn active" data-tab="tabGraphs">📈 Gráficas</button>
+  <button class="tab-btn" data-tab="tabParams">⚙️ Parámetros</button>
+  <button class="tab-btn" data-tab="tabBank">📋 Trazos</button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     TAB 1: GRAPHS
+════════════════════════════════════════════════ -->
+<div id="tabGraphs" class="tab-content active">
+
+  <!-- Duration + timebase -->
+  <div class="controls-bar">
+    <label>Base de tiempos:</label>
+    <select id="timebaseSelect" style="padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-family:Georgia,serif;font-size:.88em;background:#fafafa;color:#2c2c2c;">
+      <option value="10">10 ms</option>
+      <option value="25" selected>25 ms</option>
+      <option value="50">50 ms</option>
+      <option value="100">100 ms</option>
+      <option value="200">200 ms</option>
+    </select>
+    <input type="hidden" id="durTotal" value="25">
+  </div>
+
+  <!-- Toggle sub-graphs -->
+  <div class="tog-row">
+    <button class="tog-btn active" id="btnCurrents">✓ I_total</button>
+    <button class="tog-btn" id="btnGates">Compuertas</button>
+    <button class="tog-btn" id="btnConductances">Conductancias</button>
+  </div>
+
+  <!-- Save trace -->
+  <div class="save-row">
+    <button class="btn-save" id="saveBtn" disabled>💾 Guardar trazo</button>
+    <button class="btn-clear-bank" id="clearAllBtn">🗑 Borrar</button>
+    <span class="trace-count" id="traceCount"></span>
+  </div>
+
+  <!-- Ionic currents graph (primary) -->
+  <div class="graph-card" id="currentsGraph">
+    <div class="gt">Corriente Total de Membrana — I_m (μA/cm²)</div>
+    <div class="canvas-wrap"><canvas id="currentsChart"></canvas></div>
+    <div class="cursor-info" id="currentsCursorInfo">— toca la gráfica para leer valores —</div>
+  </div>
+
+  <!-- Voltage command graph (secondary, smaller) -->
+  <div class="graph-card" id="vmGraph">
+    <div class="gt">Voltaje de Comando (mV)</div>
+    <div class="canvas-wrap" style="height:130px"><canvas id="vmChart"></canvas></div>
+    <div class="cursor-info" id="vmCursorInfo"></div>
+  </div>
+
+  <!-- Gates graph (optional) -->
+  <div class="graph-card hidden" id="gatesGraph">
+    <div class="gt">Compuertas (m, h, n)</div>
+    <div class="canvas-wrap"><canvas id="gatesChart"></canvas></div>
+    <div class="cursor-info" id="gatesCursorInfo"></div>
+  </div>
+
+  <!-- Conductances graph (optional) -->
+  <div class="graph-card hidden" id="condGraph">
+    <div class="gt">Conductancias (mS/cm²)</div>
+    <div class="canvas-wrap"><canvas id="condChart"></canvas></div>
+    <div class="cursor-info" id="condCursorInfo"></div>
+  </div>
+
+</div><!-- /tabGraphs -->
+
+<!-- ══════════════════════════════════════════════
+     TAB 2: PARAMETERS (sub-tabs)
+════════════════════════════════════════════════ -->
+<div id="tabParams" class="tab-content">
+
+  <div class="sub-tab-nav">
+    <button class="sub-tab-btn active" data-sub="subProtocol">🔌 Protocolo</button>
+    <button class="sub-tab-btn" data-sub="subIons">🧪 Iones</button>
+    <button class="sub-tab-btn" data-sub="subCond">📊 Conduct.</button>
+    <button class="sub-tab-btn" data-sub="subPharm">💊 Farmac.</button>
+  </div>
+
+  <!-- SUB-PANEL: VOLTAGE PROTOCOL -->
+  <div id="subProtocol" class="sub-panel active">
+    <div class="card">
+      <h2>Protocolo de Voltaje</h2>
+      <div class="grid2">
+        <div class="form-group">
+          <label>V<sub>hold</sub> (mV)</label>
+          <input type="number" id="vcHold" value="-90" step="1">
+        </div>
+        <div class="form-group">
+          <label>V<sub>test</sub> (mV)</label>
+          <input type="number" id="vcTest" value="-30" step="1">
+        </div>
+        <div class="form-group">
+          <label>Inicio pulso (ms)</label>
+          <input type="number" id="vcT1" value="2" step="0.5" min="0.5">
+        </div>
+        <div class="form-group">
+          <label>Duración pulso (ms)</label>
+          <input type="number" id="vcDur" value="15" step="0.5" min="1">
+        </div>
+      </div>
+      <!-- Live voltage-step preview -->
+      <div class="vc-preview">
+        <canvas id="previewCanvas" height="50"></canvas>
+        <div class="vc-labels">
+          <span id="lbl_hold">V<sub>hold</sub>: —</span>
+          <span id="lbl_test">V<sub>test</sub>: —</span>
+          <span id="lbl_depol">Depol: —</span>
+        </div>
+      </div>
+    </div>
+  </div><!-- /subProtocol -->
+
+  <!-- SUB-PANEL: IONS -->
+  <div id="subIons" class="sub-panel">
+    <div class="card">
+      <h2>Concentraciones (mM)</h2>
+      <div class="grid2">
+        <div class="form-group"><label>[Na⁺]ₑ</label><input type="number" id="nae" value="440"></div>
+        <div class="form-group"><label>[Na⁺]ᵢ</label><input type="number" id="nai" value="50"></div>
+        <div class="form-group"><label>[K⁺]ₑ</label><input type="number" id="ke" value="9.5"></div>
+        <div class="form-group"><label>[K⁺]ᵢ</label><input type="number" id="ki" value="440"></div>
+        <div class="form-group"><label>[Cl⁻]ₑ</label><input type="number" id="cle" value="440"></div>
+        <div class="form-group"><label>[Cl⁻]ᵢ</label><input type="number" id="cli" value="14"></div>
+      </div>
+      <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="temperatura" value="6.3" step="0.1"></div>
+      <div class="nernst-box">
+        <h3>Potenciales de Equilibrio (mV)</h3>
+        <div class="nernst-vals">
+          <div class="nernst-item"><div class="nl">E<sub>Na</sub></div><div class="nv" id="ena">—</div></div>
+          <div class="nernst-item"><div class="nl">E<sub>K</sub></div><div class="nv" id="ek">—</div></div>
+          <div class="nernst-item"><div class="nl">E<sub>Cl</sub></div><div class="nv" id="ecl">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /subIons -->
+
+  <!-- SUB-PANEL: CONDUCTANCES -->
+  <div id="subCond" class="sub-panel">
+    <div class="card">
+      <h2>Conductancias Máximas</h2>
+      <div class="form-group"><label>ḡ<sub>Na</sub> (mS/cm²)</label><input type="number" id="gna" value="120"></div>
+      <div class="form-group"><label>ḡ<sub>K</sub> (mS/cm²)</label><input type="number" id="gk" value="36"></div>
+      <div class="form-group"><label>ḡ<sub>leak</sub> (mS/cm²)</label><input type="number" id="gl" value="0.3" step="0.1"></div>
+    </div>
+  </div><!-- /subCond -->
+
+  <!-- SUB-PANEL: PHARMACOLOGY -->
+  <div id="subPharm" class="sub-panel">
+    <div class="card">
+      <h2>Bloqueadores Iónicos</h2>
+      <div class="form-group">
+        <label>TTX — bloquea Na⁺ (μM)</label>
+        <input type="number" id="ttx" value="0" step="0.1" min="0">
+        <div class="blocker-info">Bloqueo: <span id="ttxBlock">0.0</span>%</div>
+      </div>
+      <div class="form-group">
+        <label>TEA — bloquea K⁺ (mM)</label>
+        <input type="number" id="tea" value="0" step="0.1" min="0">
+        <div class="blocker-info">Bloqueo: <span id="teaBlock">0.0</span>%</div>
+      </div>
+      <div class="form-group" style="margin-top:14px;padding-top:12px;border-top:1.5px solid #d1fae5">
+        <label>Pronasa — elimina inactivación Na⁺ (%)</label>
+        <input type="number" id="pronase" value="0" step="5" min="0" max="100">
+        <div class="blocker-info">h fijada en: <span id="pronaseVal">1.00</span> (h→1 al 100%)</div>
+      </div>
+    </div>
+  </div><!-- /subPharm -->
+
+</div><!-- /tabParams -->
+
+<!-- ══════════════════════════════════════════════
+     TAB 3: TRACE BANK
+════════════════════════════════════════════════ -->
+<div id="tabBank" class="tab-content">
+  <div class="card">
+    <h2>📋 Banco de Trazos (máx. 8)</h2>
+    <div class="bank-list" id="bankList">
+      <div style="font-size:.8em;color:#9ca3af;text-align:center;padding:20px 0;">Sin trazos guardados</div>
+    </div>
+  </div>
+</div><!-- /tabBank -->
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <button class="btn-run-big" id="runBtn">▶ Ejecutar simulación</button>
+  <button class="btn-reset-sm" id="resetBtn">↻</button>
+</div>
+
+<script>
+// ── CONSTANTS ───────────────────────────────────────────────
+const R_const = 1.987, F_const = 9.648;
+const TRACE_COLORS = ['#e63946','#2a9d8f','#e9a820','#457b9d','#9b5de5',
+                      '#f4a261','#2196f3','#8d6e63'];
+
+// ── STATE ────────────────────────────────────────────────────
+let simulationData = [], savedTraces = [];
+let showGates = false, showConductances = false;
+let vmChart = null, currentsChart = null, gatesChart = null, condChart = null;
+let timebaseMs = 25;
+
+function g(id) { return document.getElementById(id); }
+
+// ── TABS ─────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    g(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── SUB-TABS ──────────────────────────────────────────────────
+document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    g(btn.dataset.sub).classList.add('active');
+  });
+});
+
+// ── NERNST ───────────────────────────────────────────────────
+function calcNernst() {
+  const ke = +g('ke').value, ki = +g('ki').value;
+  const nae = +g('nae').value, nai = +g('nai').value;
+  const cli = +g('cli').value, cle = +g('cle').value;
+  const T = +g('temperatura').value;
+  if (ke > 0 && nae > 0 && cli > 0) {
+    const ek  = (R_const*(273+T)/F_const) * Math.log10(ke/ki);
+    const ena = (R_const*(273+T)/F_const) * Math.log10(nae/nai);
+    const ecl = (R_const*(273+T)/F_const) * Math.log10(cli/cle);
+    g('ena').textContent = ena.toFixed(1);
+    g('ek').textContent  = ek.toFixed(1);
+    g('ecl').textContent = ecl.toFixed(1);
+    return { vna: -ena-90, vk: -ek-90, vl: -ecl-90 };
+  }
+  return { vna: 0, vk: 0, vl: 0 };
+}
+
+function updateBlockers() {
+  const ttx = +g('ttx').value || 0, tea = +g('tea').value || 0;
+  const pr = +g('pronase').value || 0;
+  g('ttxBlock').textContent = ((1-Math.exp(-ttx/10))*100).toFixed(1);
+  g('teaBlock').textContent = ((1-Math.exp(-tea/10))*100).toFixed(1);
+  g('pronaseVal').textContent = (1 - (1 - pr/100) * 1).toFixed(2);
+}
+
+// ── VOLTAGE STEP PREVIEW ──────────────────────────────────────
+function drawPreview() {
+  const cv = g('previewCanvas');
+  const W = cv.parentElement.clientWidth - 24 || 300;
+  cv.width = W; cv.height = 50;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, W, 50);
+  const hold = +g('vcHold').value, test = +g('vcTest').value;
+  const t1 = +g('vcT1').value, dur = +g('vcDur').value;
+  const total = +g('durTotal').value || 25;
+  const t2 = t1 + dur;
+  const vmin = Math.min(hold, test) - 5, vmax = Math.max(hold, test) + 5;
+  const vr = vmax - vmin || 1;
+  const tx = t => (t / total) * W;
+  const ty = v => 44 - ((v - vmin) / vr) * 38;
+  // zero line
+  ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(W, ty(0)); ctx.stroke();
+  // step waveform
+  ctx.strokeStyle = '#065f46'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, ty(hold));
+  ctx.lineTo(tx(t1), ty(hold));
+  ctx.lineTo(tx(t1), ty(test));
+  ctx.lineTo(tx(t2), ty(test));
+  ctx.lineTo(tx(t2), ty(hold));
+  ctx.lineTo(W, ty(hold));
+  ctx.stroke();
+  // fill pulse
+  ctx.fillStyle = 'rgba(6,95,70,0.08)';
+  ctx.fillRect(tx(t1), Math.min(ty(hold), ty(test)),
+               tx(t2) - tx(t1), Math.abs(ty(test) - ty(hold)));
+  // labels
+  const depol = (test - hold).toFixed(0);
+  g('lbl_hold').innerHTML = `V<sub>hold</sub>: <b>${hold} mV</b>`;
+  g('lbl_test').innerHTML = `V<sub>test</sub>: <b>${test} mV</b>`;
+  g('lbl_depol').innerHTML = `Depol: <b>${depol > 0 ? '+' : ''}${depol} mV</b>`;
+}
+
+// ── HH ALPHA/BETA ─────────────────────────────────────────────
+function calcAB(v, T) {
+  const q = Math.pow(3, (T - 6.3) / 10);
+  return {
+    an: (0.01*(v+10))/(Math.exp((v+10)/10)-1)*q,
+    bn: 0.125*Math.exp(v/80)*q,
+    am: (0.1*(v+25))/(Math.exp((v+25)/10)-1)*q,
+    bm: 4*Math.exp(v/18)*q,
+    ah: 0.07*Math.exp(v/20)*q,
+    bh: 1/(Math.exp((v+30)/10)+1)*q
+  };
+}
+
+// ── SIMULATION ────────────────────────────────────────────────
+function runSimulation() {
+  g('runBtn').disabled = true;
+  g('runBtn').textContent = '⏳ Simulando…';
+  setTimeout(() => {
+    const dt = 0.02;
+    const dur    = +g('durTotal').value;
+    const T      = +g('temperatura').value;
+    const gna    = +g('gna').value, gk = +g('gk').value, gl = +g('gl').value;
+    const ttx    = +g('ttx').value, tea = +g('tea').value;
+    const pr     = +g('pronase').value / 100;  // pronase fraction 0–1
+    const vcHold = +g('vcHold').value;
+    const vcTest = +g('vcTest').value;
+    const vcT1   = +g('vcT1').value;
+    const vcT2   = vcT1 + +g('vcDur').value;
+    const { vna, vk, vl } = calcNernst();
+    const gnaBlock = Math.exp(-ttx/10), gkBlock = Math.exp(-tea/10);
+
+    simulationData = [];
+    const N = Math.floor(dur / dt);
+
+    // Initialise gates at holding potential
+    let vm = vcHold, v = -vm - 90;
+    const ab0 = calcAB(v, T);
+    let n = ab0.an/(ab0.an+ab0.bn);
+    let m = ab0.am/(ab0.am+ab0.bm);
+    let h = ab0.ah/(ab0.ah+ab0.bh);
+
+    for (let i = 0; i < N; i++) {
+      const t = i * dt;
+      vm = (t >= vcT1 && t < vcT2) ? vcTest : vcHold;
+      v  = -vm - 90;
+      const ab = calcAB(v, T);
+
+      const g_na = gna * m*m*m * gnaBlock * h;
+      const g_k  = gk  * n*n*n*n * gkBlock;
+      const ina  = g_na * (v - vna);
+      const ik   = g_k  * (v - vk);
+      const il_  = gl   * (v - vl);
+      const iclamp = -(ina + ik + il_);
+
+      // Update gates
+      n += (ab.an*(1-n) - ab.bn*n)*dt;
+      m += (ab.am*(1-m) - ab.bm*m)*dt;
+      h += (ab.ah*(1-h) - ab.bh*h)*dt;
+      // Pronase: fix h toward 1
+      if (pr > 0) h = h*(1-pr) + 1*pr;
+
+      if (i % 5 === 0) {
+        simulationData.push({
+          t:  +t.toFixed(2),
+          vm: +vm.toFixed(2),
+          m:  +m.toFixed(4), h: +h.toFixed(4), n: +n.toFixed(4),
+          ina: +(-ina).toFixed(3),
+          ik:  +(-ik).toFixed(3),
+          il:  +(-il_).toFixed(3),
+          itot: +iclamp.toFixed(3),
+          gna_t: +(g_na).toFixed(4),
+          gk_t:  +(g_k).toFixed(4)
+        });
+      }
+    }
+
+    plotGraphs();
+    g('saveBtn').disabled = false;
+    g('runBtn').disabled = false;
+    g('runBtn').textContent = '▶ Ejecutar simulación';
+    document.querySelector('.tab-btn[data-tab="tabGraphs"]').click();
+  }, 80);
+}
+
+// ── PLOT ─────────────────────────────────────────────────────
+function plotGraphs() {
+  const dat = simulationData;
+  [vmChart, currentsChart, gatesChart, condChart].forEach(ch => { if(ch) ch.destroy(); });
+  vmChart = currentsChart = gatesChart = condChart = null;
+
+  // Saved trace overlays for currents chart
+  const overlays = savedTraces.map(tr => ({
+    label: tr.label,
+    data:  tr.t.map((tx, i) => ({x: tx, y: tr.itot[i]})),
+    borderColor: tr.color, borderWidth: 1.5,
+    pointRadius: 0, borderDash:[5,4], parsing:false
+  }));
+
+  // ── Voltage command chart ──
+  vmChart = new Chart(g('vmChart'), {
+    type:'line',
+    data:{ datasets:[{
+      label:'Voltaje comando',
+      data: dat.map(d=>({x:d.t, y:d.vm})),
+      borderColor:'#065f46', borderWidth:2.2, pointRadius:0, parsing:false
+    }]},
+    options: buildOpts({y:{type:'linear',position:'left',
+      title:{display:true,text:'Voltaje (mV)'}, min:-100, max:60}})
+  });
+
+  // ── Total membrane current chart (primary display) ──
+  currentsChart = new Chart(g('currentsChart'), {
+    type:'line',
+    data:{ datasets:[
+      { label:'I_total', data:dat.map(d=>({x:d.t,y:d.itot})),
+        borderColor:'#065f46', borderWidth:2.5, pointRadius:0, parsing:false },
+      ...overlays
+    ]},
+    options: buildOpts({y:{type:'linear',position:'left',
+      title:{display:true,text:'I_total (μA/cm²)'}}})
+  });
+
+  // ── Gates chart ──
+  gatesChart = new Chart(g('gatesChart'), {
+    type:'line',
+    data:{ datasets:[
+      {label:'m (Na act)',  data:dat.map(d=>({x:d.t,y:d.m})), borderColor:'#e63946', borderWidth:2, pointRadius:0, parsing:false},
+      {label:'h (Na inact)',data:dat.map(d=>({x:d.t,y:d.h})), borderColor:'#f59e0b', borderWidth:2, pointRadius:0, parsing:false},
+      {label:'n (K act)',   data:dat.map(d=>({x:d.t,y:d.n})), borderColor:'#2a9d8f', borderWidth:2, pointRadius:0, parsing:false}
+    ]},
+    options: buildOpts({y:{type:'linear',position:'left',
+      title:{display:true,text:'Probabilidad'}, min:0, max:1}})
+  });
+
+  // ── Conductances chart ──
+  condChart = new Chart(g('condChart'), {
+    type:'line',
+    data:{ datasets:[
+      {label:'G_Na', data:dat.map(d=>({x:d.t,y:d.gna_t})), borderColor:'#e63946', borderWidth:2, pointRadius:0, parsing:false},
+      {label:'G_K',  data:dat.map(d=>({x:d.t,y:d.gk_t})),  borderColor:'#2a9d8f', borderWidth:2, pointRadius:0, parsing:false}
+    ]},
+    options: buildOpts({y:{type:'linear',position:'left',
+      title:{display:true,text:'Conductancia (mS/cm²)'}, min:0}})
+  });
+
+  attachTouch('currentsChart', 'currentsCursorInfo', 'currents');
+  attachTouch('vmChart',       'vmCursorInfo',       'vm');
+  attachTouch('gatesChart',    'gatesCursorInfo',    'gates');
+  attachTouch('condChart',     'condCursorInfo',     'cond');
+  applyTimebase();
+}
+
+function buildOpts(yScales) {
+  const tks = {font:{family:'Georgia',size:10}};
+  const yE = Object.fromEntries(Object.entries(yScales).map(([k,v])=>[k,{...v,ticks:tks}]));
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins:{
+      legend:{display:true,position:'top',labels:{font:{family:'Georgia',size:11},boxWidth:22}},
+      tooltip:{enabled:false}
+    },
+    scales:{
+      x:{type:'linear', min:0, max:timebaseMs||undefined,
+         title:{display:true,text:'Tiempo (ms)'},
+         ticks:{maxTicksLimit:8, font:{family:'Georgia',size:10}}},
+      ...yE
+    },
+    interaction:{mode:'index',intersect:false}
+  };
+}
+
+// ── TIMEBASE ─────────────────────────────────────────────────
+function applyTimebase() {
+  [vmChart, currentsChart, gatesChart, condChart].filter(Boolean).forEach(ch => {
+    ch.options.scales.x.max = timebaseMs === 0 ? undefined : timebaseMs;
+    ch.update('none');
+  });
+}
+g('timebaseSelect').addEventListener('change', e => {
+  timebaseMs = +e.target.value;
+  g('durTotal').value = timebaseMs;
+  applyTimebase();
+});
+
+// ── CURSOR / TOUCH ────────────────────────────────────────────
+function attachTouch(chartId, infoId, mode) {
+  const canvas = g(chartId), box = g(infoId);
+  function readAt(e) {
+    const chart = mode==='vm'?vmChart:mode==='currents'?currentsChart:
+                  mode==='gates'?gatesChart:condChart;
+    if (!chart) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const pts = chart.getElementsAtEventForMode(touch,'index',{intersect:false},true);
+    if (!pts.length) { box.textContent=''; return; }
+    const idx = pts[0].index;
+    if (idx < 0 || idx >= simulationData.length) { box.textContent=''; return; }
+    const d = simulationData[idx];
+    if (mode==='vm')
+      box.innerHTML=`t: <span>${d.t.toFixed(2)} ms</span> &nbsp; Vm: <span>${d.vm.toFixed(1)} mV</span>`;
+    else if (mode==='currents')
+      box.innerHTML=`t: <span>${d.t.toFixed(2)} ms</span> &nbsp; I_m: <span>${d.itot.toFixed(3)} μA/cm²</span>`;
+    else if (mode==='gates')
+      box.innerHTML=`t: <span>${d.t.toFixed(2)} ms</span> &nbsp; m: <span>${d.m.toFixed(4)}</span> &nbsp; h: <span>${d.h.toFixed(4)}</span> &nbsp; n: <span>${d.n.toFixed(4)}</span>`;
+    else
+      box.innerHTML=`t: <span>${d.t.toFixed(2)} ms</span> &nbsp; G_Na: <span>${d.gna_t.toFixed(4)}</span> &nbsp; G_K: <span>${d.gk_t.toFixed(4)}</span>`;
+  }
+  canvas.addEventListener('mousemove', readAt);
+  canvas.addEventListener('touchmove', e=>{e.preventDefault();readAt(e);},{passive:false});
+  canvas.addEventListener('mouseleave', ()=>box.textContent='');
+}
+
+// ── TOGGLE SUB-GRAPHS ─────────────────────────────────────────
+g('btnCurrents').addEventListener('click', ()=>{
+  const show = g('currentsGraph').classList.toggle('hidden');
+  g('btnCurrents').classList.toggle('active', !show);
+  g('btnCurrents').textContent = show ? 'I_total' : '✓ I_total';
+});
+g('btnGates').addEventListener('click', ()=>{
+  showGates = !showGates;
+  g('gatesGraph').classList.toggle('hidden', !showGates);
+  g('btnGates').classList.toggle('active', showGates);
+  g('btnGates').textContent = showGates ? '✓ Compuertas' : 'Compuertas';
+});
+g('btnConductances').addEventListener('click', ()=>{
+  showConductances = !showConductances;
+  g('condGraph').classList.toggle('hidden', !showConductances);
+  g('btnConductances').classList.toggle('active', showConductances);
+  g('btnConductances').textContent = showConductances ? '✓ Conductancias' : 'Conductancias';
+});
+
+// ── TRACE BANK ────────────────────────────────────────────────
+g('saveBtn').addEventListener('click', ()=>{
+  if (!simulationData.length) return;
+  if (savedTraces.length >= 8) { alert('Banco lleno (8/8). Elimina un trazo antes.'); return; }
+  const idx = savedTraces.length;
+  const vtest = +g('vcTest').value, vhold = +g('vcHold').value;
+  savedTraces.push({
+    label: `T${idx+1}: ${vtest>0?'+':''}${vtest}mV (Δ${vtest-vhold>0?'+':''}${vtest-vhold}mV)`,
+    color: TRACE_COLORS[idx % TRACE_COLORS.length],
+    t:    simulationData.map(d=>d.t),
+    itot: simulationData.map(d=>d.itot),
+    params: { vhold, vtest, T:+g('temperatura').value,
+              gna:+g('gna').value, gk:+g('gk').value,
+              ttx:+g('ttx').value, tea:+g('tea').value,
+              pronase:+g('pronase').value }
+  });
+  renderBank(); plotGraphs();
+});
+
+g('clearAllBtn').addEventListener('click', ()=>{
+  savedTraces=[]; renderBank();
+  if (simulationData.length) plotGraphs();
+});
+
+function deleteTrace(i) {
+  savedTraces.splice(i,1);
+  savedTraces.forEach((tr,j)=>{ tr.color = TRACE_COLORS[j % TRACE_COLORS.length]; });
+  renderBank();
+  if (simulationData.length) plotGraphs();
+}
+
+function renderBank() {
+  const list = g('bankList'); list.innerHTML='';
+  g('traceCount').textContent = savedTraces.length > 0 ? `${savedTraces.length}/8` : '';
+  if (!savedTraces.length) {
+    list.innerHTML='<div style="font-size:.8em;color:#9ca3af;text-align:center;padding:20px 0;">Sin trazos guardados</div>';
+    return;
+  }
+  savedTraces.forEach((tr, i) => {
+    const p = tr.params;
+    const el = document.createElement('div');
+    el.className = 'bank-item';
+    el.style.borderColor = tr.color;
+    el.innerHTML = `
+      <div class="bank-swatch" style="background:${tr.color}"></div>
+      <div class="bank-info">
+        <div class="bank-label" style="color:${tr.color}">${tr.label}</div>
+        <div class="bank-params">V<sub>hold</sub>=${p.vhold} mV · T=${p.T}°C</div>
+        <div class="bank-params">TTX=${p.ttx}μM · TEA=${p.tea}mM · Pronase=${p.pronase}%</div>
+      </div>
+      <button class="bank-del" title="Eliminar">✕</button>`;
+    el.querySelector('.bank-del').addEventListener('click', ()=>deleteTrace(i));
+    list.appendChild(el);
+  });
+}
+
+// ── RESET ─────────────────────────────────────────────────────
+g('resetBtn').addEventListener('click', ()=>{
+  const def = { vcHold:'-90', vcTest:'-30', vcT1:'2', vcDur:'15', durTotal:'25',
+    gna:'120', gk:'36', gl:'0.3', nae:'440', nai:'50', ke:'9.5', ki:'440',
+    cle:'440', cli:'14', temperatura:'6.3', ttx:'0', tea:'0', pronase:'0' };
+  Object.entries(def).forEach(([k,v])=>{ if(g(k)) g(k).value=v; });
+  calcNernst(); updateBlockers(); drawPreview();
+  savedTraces=[]; simulationData=[];
+  renderBank();
+  showGates=false; showConductances=false;
+  g('gatesGraph').classList.add('hidden');
+  g('condGraph').classList.add('hidden');
+  g('currentsGraph').classList.remove('hidden');
+  g('btnGates').classList.remove('active'); g('btnGates').textContent='Compuertas';
+  g('btnConductances').classList.remove('active'); g('btnConductances').textContent='Conductancias';
+  g('btnCurrents').classList.add('active'); g('btnCurrents').textContent='✓ I_total';
+  g('saveBtn').disabled=true; g('traceCount').textContent='';
+  g('timebaseSelect').value = '25';
+  g('durTotal').value = '25';
+  timebaseMs=25;
+  [vmChart,currentsChart,gatesChart,condChart].forEach(ch=>{if(ch)ch.destroy();});
+  vmChart=currentsChart=gatesChart=condChart=null;
+  g('currentsCursorInfo').textContent='— toca la gráfica para leer valores —';
+  g('vmCursorInfo').textContent='';
+});
+
+// ── LISTENERS ─────────────────────────────────────────────────
+g('runBtn').addEventListener('click', runSimulation);
+['ke','ki','nae','nai','cli','cle','temperatura'].forEach(k=>
+  g(k).addEventListener('input', calcNernst));
+['vcHold','vcTest','vcT1','vcDur','durTotal'].forEach(k=>
+  g(k).addEventListener('input', drawPreview));
+g('ttx').addEventListener('input', updateBlockers);
+g('tea').addEventListener('input', updateBlockers);
+g('pronase').addEventListener('input', updateBlockers);
+
+// ── INIT ──────────────────────────────────────────────────────
+calcNernst();
+updateBlockers();
+drawPreview();
+renderBank();
+</script>
+</body>
+</html>
